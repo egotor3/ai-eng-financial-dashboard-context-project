@@ -1,54 +1,76 @@
-# Financial Metrics Dashboard
+# Specs del dashboard financiero
 
-<!-- hide -->
+Autora: Elena Gotor (`egotor3`).  
+Capa de **especificación** para el fork [ai-eng-financial-dashboard-context-project](https://github.com/egotor3/ai-eng-financial-dashboard-context-project).
 
-By [@marcogonzalo](https://github.com/marcogonzalo) and [other contributors](https://github.com/4GeeksAcademy/ai-eng-financial-dashboard-context-project/graphs/contributors) at [4Geeks Academy](https://4geeksacademy.com/)
+No hay componentes React ni `fetch` en esta carpeta. El frontend actual solo llama a `GET /api/metrics`. El backend ya expone el resto; aquí se documenta cómo usarlo.
 
-[![build by developers](https://img.shields.io/badge/build_by-Developers-blue)](https://4geeks.com)
-[![4Geeks Academy](https://img.shields.io/twitter/follow/4geeksacademy?style=social&logo=x)](https://x.com/4geeksacademy)
+Revisado contra `backend/app/routes.py` y los tests de `backend/tests/test_routes.py`.
 
-_Estas instrucciones están [disponibles en español](./README.es.md)._
+## Archivos
 
-**Before you start**: 📗 [Read the instructions](https://4geeks.com/lesson/how-to-start-a-project) on how to start a coding project.
+| Archivo | Qué es |
+| --- | --- |
+| `api-types.ts` | Formas de las respuestas |
+| `param-types.ts` | Query params |
+| `components.md` | Cajas de UI y casos vacíos |
+| `tsconfig.json` | TypeScript estricto para validar los tipos |
 
-<!-- endhide -->
-
----
-
-_Financial metrics dashboard with a React + TypeScript frontend and a FastAPI backend._
-
-## Recommended steps
-
-1. Fork this repository to your account.
-2. Open your fork in GitHub Codespaces or clone it and run it in your local environment.
-3. Run your AI agent to inspect both frontend and backend.
-4. Document the proposed rules and memory bank in your fork.
-5. Refine and validate the rules until they fit the project's real workflow.
-
-## Expected agents directory structure
-
-```text
-./.agents
-└─ /rules
-   └─ <rule-name>.md
-└─ /skills
-   └─ /<skill-name>
-      └─ /SKILL.md
-```
-
-## How to run locally
+Comprobar tipos:
 
 ```bash
-docker compose up --build
+npx tsc --noEmit --project frontend/specs/tsconfig.json
 ```
 
-The frontend uses the Vite proxy for `/api` by default, so no extra environment variables are required in local development or Codespaces.
-If you need to target a different backend origin, copy `frontend/.env.example` to `.env` and set `VITE_API_BASE_URL`.
+## Mapa feature → endpoint
 
-- Frontend: http://localhost:5173
-- Backend: http://localhost:8000
-- API documentation: http://localhost:8000/docs
+| Feature | Endpoints | Params | Respuesta |
+| --- | --- | --- | --- |
+| Actual (ya en `App.tsx`) | `GET /api/metrics` | `MetricsListParams` | `FinancialMovement[]` |
+| F1 Filtro de fechas | `GET /api/metrics/facets` + recargar métricas con fechas | `DateRangeFilter` | `FacetsResponse` |
+| F2 Tabla de alertas | `GET /api/metrics/alerts` | `AlertsParams` | `AlertEntry[]` |
+| F3 B2B vs B2C | `GET /api/metrics/categories/top` (dos veces) | `TopCategoriesParams` | `CategoryEntry[]` |
 
----
+Otros endpoints del backend (no son las 3 features, pero existen):  
+`/health`, `/api/metrics/summary`, `/api/metrics/comparison`, `/api/metrics/b2b`, `/api/metrics/b2c`.
 
-This and many other projects are built by students as part of the [Career Programs](https://4geeksacademy.com/compare-programs) at [4Geeks Academy](https://4geeksacademy.com). By [@marcogonzalo](https://github.com/marcogonzalo) and [other contributors](https://github.com/4GeeksAcademy/ai-eng-financial-dashboard-context-project/graphs/contributors). Find out more about [AI Engineering](https://4geeksacademy.com/en/coding-bootcamps/ai-engineering), [Data Science & Machine Learning](https://4geeksacademy.com/en/coding-bootcamps/data-science-ml), [Cybersecurity](https://4geeksacademy.com/en/coding-bootcamps/cybersecurity) and [Full-Stack Software Developer with AI](https://4geeksacademy.com/en/coding-bootcamps/full-stack-developer).
+## Valores válidos
+
+| Campo | Restricción |
+| --- | --- |
+| `start_date` / `end_date` | `YYYY-MM-DD`. No enviar `""`. |
+| `threshold` (F2) | UI 0.01–1.0. Backend `>= 0`. Default 0.3 |
+| `operation_type` (F3) | F3 envía siempre `income` |
+| `limit` (F3) | 1–20. F3 envía `5` |
+| `business_type` (F3) | `B2B` o `B2C` (una llamada por lado) |
+| `group_by` | `day` \| `week` \| `month` |
+
+- `FacetsResponse.min_date <= max_date`
+- `AlertsResponse` y `TopCategoriesResponse` son **arrays**. `[]` no es error
+- `ComparisonResponse.delta_pct` puede ser `null` si el periodo anterior vale 0
+
+## Casos límite (≥ 2 por feature)
+
+### F1 Fechas
+
+- **E1.1** Ambos vacíos: no mandar fechas; se ve todo el histórico. La etiqueta del rango disponible sigue saliendo.
+- **E1.2** Solo un lado: válido. No rellenar el otro automático.
+- **E1.3** start > end: aviso, pero se envía igual. El backend puede devolver lista vacía.
+
+### F2 Alertas
+
+- **E2.1** `[]`: mensaje de vacío; la tabla y el umbral siguen visibles.
+- **E2.2** Cambio de umbral mientras carga: no pintar la respuesta vieja.
+- **E2.3** El rango de F1 deja el array vacío: mismo vacío que E2.1.
+
+### F3 B2B / B2C
+
+- **E3.1** Un lado vacío: panel vacío; el otro normal.
+- **E3.2** Los dos vacíos: overlay en el gráfico.
+- **E3.3** Categorías distintas: no alinear filas entre paneles.
+
+## Qué no entra en esta entrega
+
+- Implementar las pantallas
+- Elegir librería de rutas
+- Generar tipos desde OpenAPI (ahora van a mano)
